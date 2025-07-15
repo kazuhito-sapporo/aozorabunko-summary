@@ -3,6 +3,10 @@ import requests
 import re
 import nltk
 import MeCab # MeCabをインポート
+import unidic_lite # unidic-liteをインポートして辞書パスを取得
+from bs4 import BeautifulSoup # BeautifulSoupをインポート
+from urllib.parse import urljoin # urljoinは今回は不要ですが、残しておきます
+
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.text_rank import TextRankSummarizer
@@ -25,17 +29,21 @@ def download_nltk_data():
 def init_mecab():
     """
     MeCab形態素解析器を初期化します。
+    unidic-liteの辞書パスを明示的に指定します。
+    -Ochasenオプションは削除されています。
     """
-    # unidic-liteを使用する場合、辞書のパスは通常不要
-    # 必要に応じて -d オプションで辞書パスを指定
-    return MeCab.Tagger("-Ochasen") # -Ochasenで品詞情報などを取得
+    # unidic-liteの辞書パスを取得
+    dicdir = unidic_lite.DICDIR
+    # 辞書パスを-dオプションでMeCab.Taggerに渡す
+    # -Ochasenオプションは削除し、デフォルトの出力形式を使用
+    return MeCab.Tagger(f"-d {dicdir}")
 
 # NLTKデータとMeCabの初期化を実行
 download_nltk_data()
 mecab_tagger = init_mecab() # MeCabタグ付けオブジェクトを初期化
 
 # Streamlit UIのタイトルを設定
-st.title("青空文庫 要約アプリ (品詞考慮版)")
+st.title("青空文庫 要約アプリ (品詞考慮版 - XHTMLエンコーディング修正済み)")
 
 def clean_aozora_text(text):
     """
@@ -60,27 +68,29 @@ def clean_aozora_text(text):
 def analyze_pos(text):
     """
     MeCabを使ってテキストを形態素解析し、品詞情報を取得します。
+    MeCabのデフォルト出力形式に対応しています。
     Args:
         text (str): 解析対象のテキスト。
     Returns:
         list: (単語, 品詞) のタプルのリスト。
     """
+    # MeCabのデフォルト出力は、各行が「単語\t品詞,品詞細分類1,品詞細分類2,...」の形式
     parsed_lines = mecab_tagger.parse(text).split('\n')
     pos_data = []
     for line in parsed_lines:
         if line == 'EOS' or not line:
             continue
         parts = line.split('\t')
-        if len(parts) >= 4: # 少なくとも単語、品詞、品詞細分類1、品詞細分類2があることを確認
+        if len(parts) >= 2: # 少なくとも単語と品詞情報があることを確認
             word = parts[0]
-            pos = parts[3] # 品詞細分類1 (例: 名詞-固有名詞-人名-一般)
-            # より汎用的な品詞を取得したい場合は parts[1] (品詞) を使用
-            # 例: 名詞, 動詞, 助詞 など
-            pos_data.append((word, pos))
+            # 品詞情報は2番目の要素（インデックス1）にあり、カンマで区切られている
+            pos_info = parts[1].split(',')[0] # 最も大分類の品詞を取得
+            pos_data.append((word, pos_info))
     return pos_data
 
 # ユーザーからの青空文庫URL入力を受け付けるテキストボックス
-aozora_url = st.text_input("青空文庫の作品URLを入力してください (例: https://www.aozora.gr.jp/cards/000087/card456.html)")
+# 例としてXHTML版のURLを提示
+aozora_url = st.text_input("青空文庫の作品URLを入力してください (例: https://www.aozora.gr.jp/cards/000879/files/40_15151.html)")
 
 # 要約する文の数をユーザーが選択できるようにするスライダー
 num_sentences = st.slider("要約する文の数", min_value=1, max_value=20, value=5)
@@ -89,19 +99,40 @@ num_sentences = st.slider("要約する文の数", min_value=1, max_value=20, va
 if st.button("要約する"):
     # URLが入力されているか確認
     if aozora_url:
-        with st.spinner("テキスト取得中..."):
+        with st.spinner("XHTMLコンテンツ取得中..."):
             try:
-                # 指定されたURLからテキストを取得
-                response = requests.get(aozora_url)
-                response.raise_for_status() # HTTPエラーが発生した場合に例外を発生させる
-                # 青空文庫のテキストはShift_JISエンコーディングの場合が多い
-                raw_text = response.content.decode('shift_jis')
-                # 取得したテキストをクリーンアップ
+                # 1. 入力されたURLからXHTMLコンテンツを直接取得
+                response_xhtml = requests.get(aozora_url)
+                response_xhtml.raise_for_status() # HTTPエラーをチェック
+                
+                # 青空文庫のXHTMLはShift_JISエンコーディングの場合が多いので、明示的にデコード
+                # errors='ignore'を追加して、デコードできない文字があっても処理を続行
+                try:
+                    html_content = response_xhtml.content.decode('shift_jis', errors='ignore')
+                except UnicodeDecodeError:
+                    # Shift_JISでデコードできなかった場合、UTF-8を試す (念のため)
+                    html_content = response_xhtml.content.decode('utf-8', errors='ignore')
+                    st.warning("Shift_JISでデコードできませんでした。UTF-8で試行しました。")
+                
+                # BeautifulSoupでHTMLを解析し、純粋なテキストを抽出
+                soup = BeautifulSoup(html_content, 'html.parser')
+                
+                # 青空文庫のXHTMLは、本文が特定のdivタグ内にあることが多いです。
+                # 例えば、<div class="main_text"> のような構造。
+                # まず、本文と思われる要素を探します。
+                main_text_div = soup.find('div', class_='main_text')
+                if main_text_div:
+                    raw_text = main_text_div.get_text()
+                else:
+                    # もし特定の本文divが見つからない場合、ページ全体のテキストを取得
+                    raw_text = soup.get_text() 
+                
+                # 取得したテキストをクリーンアップ (青空文庫特有の記号除去)
                 cleaned_text = clean_aozora_text(raw_text)
 
                 # クリーンアップ後のテキストが空の場合の警告
-                if not cleaned_text:
-                    st.warning("取得したテキストが空か、処理後に内容がありませんでした。")
+                if not cleaned_text or len(cleaned_text.strip()) < 50: # 短すぎるテキストも対象外
+                    st.warning("取得したテキストが空か、処理後に内容がありませんでした。または、要約できるほど十分な長さのテキストではありませんでした。")
                     st.stop() # 処理を停止
 
                 # 取得したテキストの一部を表示
@@ -142,8 +173,6 @@ if st.button("要約する"):
                 st.error("無効なURL形式です。'http://' または 'https://' で始まる完全なURLを入力してください。")
             except requests.exceptions.RequestException as e:
                 st.error(f"URLからのテキスト取得中にエラーが発生しました: {e}")
-            except UnicodeDecodeError:
-                st.error("テキストのエンコーディングをShift_JISとしてデコードできませんでした。別のエンコーディングの可能性があります。")
             except Exception as e:
                 st.error(f"要約処理中に予期せぬエラーが発生しました: {e}")
     else:
@@ -153,7 +182,7 @@ if st.button("要約する"):
 st.markdown("""
 ---
 **使い方:**
-1.  青空文庫の作品ページのURLを上の入力欄に貼り付けます。
+1.  青空文庫の作品ページのXHTML版URLを上の入力欄に貼り付けます。
 2.  「要約する文の数」スライダーで、要約の長さを調整します。
 3.  「要約する」ボタンをクリックします。
 4.  元のテキストの一部、品詞解析の例、そして要約結果が表示されます。
