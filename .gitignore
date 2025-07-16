@@ -1,0 +1,16 @@
+# CloudRun/.gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.env
+.env.*
+*.log
+*.DS_Store
+.vscode/
+.idea/
+.venv/
+venv/
+.envrc
+

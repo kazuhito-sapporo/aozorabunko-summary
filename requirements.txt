@@ -1,0 +1,8 @@
+streamlit
+requests
+sumy
+nltk
+mecab-python3
+unidic-lite
+beautifulsoup4
+tinysegmenter
