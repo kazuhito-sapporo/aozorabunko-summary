@@ -30,13 +30,43 @@ def init_mecab():
     """
     MeCab形態素解析器を初期化します。
     unidic-liteの辞書パスを明示的に指定します。
-    -Ochasenオプションは削除されています。
     """
     # unidic-liteの辞書パスを取得
     dicdir = unidic_lite.DICDIR
+    
+    # mecabrcファイルのパスを unidic-lite の dicdir にあるものに設定
+    mecabrc_path = f"{dicdir}/mecabrc"
+
+    # -rオプションでmecabrcのパスを指定し、-dオプションで辞書パスを指定
+    return MeCab.Tagger(f"-r {mecabrc_path} -d {dicdir}")
+
+# MeCabの初期化 (キャッシュして一度だけ行う)
+#@st.cache_resource
+#def init_mecab():
+    """
+    MeCab形態素解析器を初期化します。
+    unidic-liteの辞書パスを明示的に指定します。
+    """
+    # unidic-liteの辞書パスを取得
+#    dicdir = unidic_lite.DICDIR
+
+    # -dオプションのみを渡し、mecabrcファイルの探索を省略
+    # これにより、/usr/local/etc/mecabrc が存在しなくてもエラーにならない
+#    return MeCab.Tagger(f"-d {dicdir}")
+
+# MeCabの初期化 (キャッシュして一度だけ行う)
+#@st.cache_resource
+#def init_mecab():
+    """
+    MeCab形態素解析器を初期化します。
+    unidic-liteの辞書パスを明示的に指定します。
+    -Ochasenオプションは削除されています。
+    """
+    # unidic-liteの辞書パスを取得
+ #   dicdir = unidic_lite.DICDIR
     # 辞書パスを-dオプションでMeCab.Taggerに渡す
     # -Ochasenオプションは削除し、デフォルトの出力形式を使用
-    return MeCab.Tagger(f"-d {dicdir}")
+ #   return MeCab.Tagger(f"-d {dicdir}")
 
 # NLTKデータとMeCabの初期化を実行
 download_nltk_data()
