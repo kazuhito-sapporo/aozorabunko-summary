@@ -1,9 +1,9 @@
 streamlit
+nltk
 requests
 beautifulsoup4
 sumy
 MeCab
 unidic-lite
-nltk
 tinysegmenter
 

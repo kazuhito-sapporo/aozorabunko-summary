@@ -11,18 +11,58 @@ from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.text_rank import TextRankSummarizer
 
+import streamlit as st
+import nltk
+
+# NLTKデータのダウンロードをキャッシュする関数
+# 修正前
+# try:
+#     nltk.data.find('corpora/punkt')
+# except nltk.downloader.DownloadError:
+#     nltk.download('punkt')
+
+# 修正後
+@st.cache_data
+def download_nltk_data():
+    try:
+        nltk.data.find('corpora/punkt')
+    except LookupError:
+        nltk.download('punkt')
+
+#    try:
+        # 必要なデータをここでダウンロード
+#        nltk.data.find('corpora/punkt')
+#        nltk.data.find('corpora/stopwords')
+#    except nltk.downloader.DownloadError:
+        # ダウンロードされていない場合はダウンロード
+#        nltk.download('punkt')
+#        nltk.download('stopwords')
+
+# アプリのメイン部分
+def main():
+    st.title("青空文庫要約アプリ")
+    
+    # NLTKデータをダウンロード
+    download_nltk_data()
+
+    # ... その他の処理
+    # ... 例: ユーザー入力、モデルのロード、要約の実行など
+    
+if __name__ == '__main__':
+    main()
+
 # NLTKデータのダウンロード (初回のみ実行されるようにキャッシュ)
 # Streamlit Cloudでは自動的にキャッシュされるため、毎回実行しても問題ありません。
-@st.cache_resource
-def download_nltk_data():
+#st.cache_resource
+#def download_nltk_data():
     """
     NLTKの'punkt'トークナイザーデータをダウンロードします。
     sumyライブラリの動作に必要です。
     """
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except nltk.downloader.DownloadError:
-        nltk.download('punkt', quiet=True)
+#    try:
+#        nltk.data.find('tokenizers/punkt')
+#    except nltk.downloader.DownloadError:
+#        nltk.download('punkt', quiet=True)
 
 # MeCabの初期化 (キャッシュして一度だけ行う)
 @st.cache_resource
