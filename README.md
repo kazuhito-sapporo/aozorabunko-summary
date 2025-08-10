@@ -1,6 +1,9 @@
 # 青空文庫要約アプリ（AozoraBunko Summary）
 
-青空文庫の作品をスクレイピングして要約する Python + Streamlit アプリです。
+青空文庫の作品をスクレイピングして要約する Python + Streamlit アプリです。   
+
+
+
 
 ## 機能概要
 
